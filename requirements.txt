@@ -1,3 +1,6 @@
 streamlit
 smartapi-python
 pyotp
+logzero
+pandas
+yfinance
