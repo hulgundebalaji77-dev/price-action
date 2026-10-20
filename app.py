@@ -23,7 +23,6 @@ timeframe_choice = st.selectbox("टाईमफ्रेम", ["ONE_MINUTE", "F
 
 # Token Mapping for Angel One
 symbol_token = "99926000" if index_choice == "Nifty 50" else "99926009"
-tradingsymbol_str = "NIFTY" if index_choice == "Nifty 50" else "BANKNIFTY"
 
 if st.button("लाईव्ह डेटा आणा व ॲनालिसिस करा"):
     if not api_key or not client_id or not password:
@@ -41,9 +40,9 @@ if st.button("लाईव्ह डेटा आणा व ॲनालिस�
             if data and data.get('status'):
                 st.success("अँजेल वनशी यशस्वीपणे कनेक्ट झाले!")
                 
-                # Fetching Historical/Candle Data with correct date range for today
+                # Fetching Historical/Candle Data
                 to_date = datetime.now()
-                from_date = to_date - timedelta(days=5) # 5 days to ensure historical candles are found
+                from_date = to_date - timedelta(days=5) 
                 
                 historicParam = {
                     "exchange": "NSE",
@@ -59,15 +58,14 @@ if st.button("लाईव्ह डेटा आणा व ॲनालिस�
                     raw_data = candle_response['data']
                     df = pd.DataFrame(raw_data, columns=['Timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
                     
-                    # Ensure correct numerical values and take the second last or latest completed candle if market is running
+                    # Convert to numeric to avoid string issues
+                    for col in ['Open', 'High', 'Low', 'Close']:
+                        df[col] = pd.to_numeric(df[col])
+
+                    # Get the latest completed/forming candle
                     latest = df.iloc[-1]
                     open_p, high_p, low_p, close_p = float(latest['Open']), float(latest['High']), float(latest['Low']), float(latest['Close'])
                     
-                    # Fallback check if OHLC is identical (live tick simulation fix)
-                    if open_p == high_p == low_p == close_p and len(df) > 1:
-                        latest = df.iloc[-2] # take previous completed candle
-                        open_p, high_p, low_p, close_p = float(latest['Open']), float(latest['High']), float(latest['Low']), float(latest['Close'])
-
                     st.write("### लेटेस्ट कँडल डेटा (OHLC):")
                     col1, col2, col3, col4 = st.columns(4)
                     col1.metric("Open", round(open_p, 2))
@@ -75,6 +73,58 @@ if st.button("लाईव्ह डेटा आणा व ॲनालिस�
                     col3.metric("Low", round(low_p, 2))
                     col4.metric("Close", round(close_p, 2))
 
-                    # Market Analysis Class (Including Bullish & Bearish / Put-Call support)
+                    # Market Analysis Class
                     class MarketAnalysis:
-                        def
+                        def __init__(self, open_price, high_price, low_price, close_price):
+                            self.open = open_price
+                            self.high = high_price
+                            self.low = low_price
+                            self.close = close_price
+
+                        def is_green(self):
+                            return self.close > self.open
+
+                        def calculate_body_range(self):
+                            return abs(self.close - self.open)
+
+                        def calculate_total_range(self):
+                            return self.high - self.low
+
+                        def evaluate_strength(self):
+                            total_range = self.calculate_total_range()
+                            if total_range == 0:
+                                return "Doji / No Range"
+                            
+                            body = self.calculate_body_range()
+                            upper_wick = self.high - max(self.open, self.close)
+                            body_percentage = (body / total_range) * 100
+
+                            if self.is_green():
+                                if body_percentage >= 70 and upper_wick <= (total_range * 0.15):
+                                    return "Strong Bullish Momentum (Option C equivalent)"
+                                elif body_percentage >= 40:
+                                    return "Moderate Bullish (Option B equivalent)"
+                                else:
+                                    return "Weak Bullish / High Rejection (Option A equivalent)"
+                            else:
+                                return "Bearish Candle"
+
+                    analyzer = MarketAnalysis(open_p, high_p, low_p, close_p)
+                    strength = analyzer.evaluate_strength()
+                    
+                    st.markdown("---")
+                    st.info(f"**कँडल स्ट्रेंथ निकाल:** {strength}")
+                    
+                    if "Strong Bullish" in strength:
+                        st.success("🚨 **सिग्नल: BUY CALL (CE)** - मजबूत बायर मोमेंटम आढळला!")
+                    elif "Moderate Bullish" in strength:
+                        st.warning("⚠️ **सिग्नल: WAIT/WATCH** - मध्यम मोमेंटम, कन्फर्मेशनची वाट पाहा.")
+                    else:
+                        st.error("❌ **सिग्नल: AVOID/BEARISH** - कमजोर कँडल किंवा सेलिंग प्रेशर.")
+                else:
+                    st.error("कँडल डेटा मिळवण्यात अपयश आले. कृपया नंतर प्रयत्न करा.")
+            else:
+                st.error(f"लॉगिन फेल झाले: {data.get('message', 'Unknown error')}")
+                
+        except Exception as e:
+            st.error(f"तांत्रिक अडचण आली: {e}")
